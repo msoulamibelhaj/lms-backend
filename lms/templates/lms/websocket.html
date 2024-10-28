@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Session - Video Call</title>
+    <style>
+        #controls {
+            margin-bottom: 20px;
+        }
+        video {
+            width: 300px;
+            height: 200px;
+            margin: 10px;
+        }
+        button:disabled {
+            background-color: lightgray;
+        }
+    </style>
+</head>
+<body>
+    <h2>Classroom Session - Video Call</h2>
+    
+    <div id="session-status">Connecting to WebSocket...</div>
+    
+    <div id="controls" style="display: none;">
+        <button id="startButton" onclick="startSession()">Start</button>
+        <button id="pauseButton" onclick="pauseSession()">Pause</button>
+        <button id="stopButton" onclick="stopSession()">Stop</button>
+    </div>
+
+    <h3>WebRTC Controls</h3>
+    <button id="offerButton" onclick="createOffer()" disabled>Create Offer</button>
+    <button id="answerButton" onclick="createAnswer()" disabled>Create Answer</button>
+
+    <h3>Local Video</h3>
+    <video id="localVideo" autoplay muted playsinline></video>
+
+    <h3>Remote Video</h3>
+    <video id="remoteVideo" autoplay playsinline></video>
+
+    <script>
+        const sessionId = 1; // Replace with dynamic session ID as needed
+        const wsUrl = `ws://127.0.0.1:8000/ws/session/${sessionId}/`; // Ensure the port matches your server
+        const socket = new WebSocket(wsUrl);
+        let localStream;
+        let peerConnection;
+        const iceServers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }, // Google STUN server
+            ]
+        };
+
+        socket.onopen = function() {
+            console.log("WebSocket connection established.");
+            document.getElementById("session-status").innerText = "WebSocket connected.";
+            document.getElementById("controls").style.display = "block"; // Show controls
+            document.getElementById("offerButton").disabled = false; // Enable offer button
+            document.getElementById("answerButton").disabled = false; // Enable answer button
+            initLocalStream(); // Start getting local audio and video stream
+        };
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            console.log("Received data:", data);
+            handleWebRTCMessage(data);
+        };
+
+        socket.onerror = function(error) {
+            console.error("WebSocket error:", error);
+            document.getElementById("session-status").innerText = "WebSocket error.";
+        };
+
+        socket.onclose = function() {
+            console.log("WebSocket connection closed.");
+            document.getElementById("session-status").innerText = "WebSocket disconnected.";
+            document.getElementById("controls").style.display = "none"; // Hide controls
+        };
+
+        async function initLocalStream() {
+            try {
+                // Request both audio and video
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                
+                // Attach the local stream to the video element
+                document.getElementById("localVideo").srcObject = localStream;
+                console.log("Local audio and video stream started.");
+            } catch (err) {
+                console.error("Error accessing local audio/video stream:", err);
+            }
+        }
+
+        async function startSession() {
+            socket.send(JSON.stringify({ action: "start" }));
+        }
+
+        function pauseSession() {
+            socket.send(JSON.stringify({ action: "pause" }));
+        }
+
+        function stopSession() {
+            socket.send(JSON.stringify({ action: "stop" }));
+        }
+
+        async function createOffer() {
+            peerConnection = new RTCPeerConnection(iceServers);
+
+            // Add local audio and video tracks to the peer connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            socket.send(JSON.stringify({ action: "offer", offer: offer }));
+            console.log("Offer sent:", offer);
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log("Sending ICE candidate:", event.candidate);
+                    socket.send(JSON.stringify({ action: "ice_candidate", candidate: event.candidate }));
+                }
+            };
+
+            peerConnection.ontrack = event => {
+                const remoteVideo = document.getElementById("remoteVideo");
+                console.log("Remote video track received.");
+                if (!remoteVideo.srcObject) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
+            };
+        }
+
+        async function createAnswer() {
+            peerConnection = new RTCPeerConnection(iceServers);
+
+            // Add local audio and video tracks to the peer connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            socket.send(JSON.stringify({ action: "answer", answer: answer }));
+            console.log("Answer sent:", answer);
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log("Sending ICE candidate:", event.candidate);
+                    socket.send(JSON.stringify({ action: "ice_candidate", candidate: event.candidate }));
+                }
+            };
+
+            peerConnection.ontrack = event => {
+                const remoteVideo = document.getElementById("remoteVideo");
+                console.log("Remote video track received.");
+                if (!remoteVideo.srcObject) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
+            };
+        }
+
+        async function handleWebRTCMessage(data) {
+            console.log("Received WebRTC message:", data);
+            if (data.action === "offer") {
+                await handleOffer(data.offer);
+            } else if (data.action === "answer") {
+                await handleAnswer(data.answer);
+            } else if (data.action === "ice_candidate") {
+                await handleIceCandidate(data.candidate);
+            }
+        }
+
+        async function handleOffer(offer) {
+            peerConnection = new RTCPeerConnection(iceServers);
+
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            socket.send(JSON.stringify({ action: "answer", answer: answer }));
+            console.log("Answer sent:", answer);
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log("Sending ICE candidate:", event.candidate);
+                    socket.send(JSON.stringify({ action: "ice_candidate", candidate: event.candidate }));
+                }
+            };
+
+            peerConnection.ontrack = event => {
+                const remoteVideo = document.getElementById("remoteVideo");
+                console.log("Remote video track received.");
+                if (!remoteVideo.srcObject) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
+            };
+        }
+
+        async function handleAnswer(answer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+
+        function handleIceCandidate(candidate) {
+            console.log("Received ICE candidate:", candidate);
+            peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+    </script>
+</body>
+</html>

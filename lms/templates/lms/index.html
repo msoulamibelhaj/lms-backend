@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Management Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h2 {
+            color: #333;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        p {
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Login</h2>
+<label for="nickname">Nickname:</label>
+<input type="text" id="nickname" placeholder="Enter nickname">
+<br>
+<label for="pin">PIN:</label>
+<input type="password" id="pin" placeholder="Enter PIN">
+<br>
+<button onclick="login()">Login</button>
+<p id="login-status"></p>
+
+<h2>Authenticated Actions</h2>
+<button onclick="fetchClasses()">Fetch Classes</button>
+<button onclick="createSession()">Create Session</button>
+<div id="output"></div>
+
+<script>
+    // Login function
+    async function login() {
+        const nickname = document.getElementById("nickname").value;
+        const pin = document.getElementById("pin").value;
+
+        try {
+            const response = await fetch("/api/login/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ nickname: nickname, pin: pin })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                // Store the token in localStorage
+                localStorage.setItem("token", data.token);
+                document.getElementById("login-status").innerText = "Login successful!";
+                console.log("Token stored:", data.token); // Debugging: check if token is stored
+            } else {
+                document.getElementById("login-status").innerText = "Login failed: " + data.error;
+                console.error("Login error:", data); // Debugging: check error details
+            }
+        } catch (error) {
+            console.error("Network error:", error);
+        }
+    }
+
+    // Fetch Classes function
+    async function fetchClasses() {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            console.error("No token found. Please login first.");
+            document.getElementById("output").innerText = "You must log in first!";
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/classes/", {
+                method: "GET",
+                headers: {
+                    "Authorization": "Token " + token,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                // Check if classes were found
+                if (data.length > 0) {
+                    const classesList = data.map(cls => `<li>${cls.name}</li>`).join('');
+                    document.getElementById("output").innerHTML = "<h3>Your Classes:</h3><ul>" + classesList + "</ul>";
+                } else {
+                    document.getElementById("output").innerText = "No classes found for this user.";
+                }
+                console.log("Classes fetched:", data); // Debugging: check classes response
+            } else {
+                document.getElementById("output").innerText = "Failed to fetch classes: " + data.error;
+                console.error("Fetch classes error:", data); // Debugging: check error details
+            }
+        } catch (error) {
+            console.error("Network error:", error);
+        }
+    }
+
+    // Create Session function (for Teachers)
+    async function createSession() {
+        const title = prompt("Enter session title:");
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            console.error("No token found. Please login first.");
+            document.getElementById("output").innerText = "You must log in first!";
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/session/create/", {
+                method: "POST",
+                headers: {
+                    "Authorization": "Token " + token,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ title: title })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                document.getElementById("output").innerText = "Session created: " + JSON.stringify(data);
+                console.log("Session created:", data); // Debugging: check session creation response
+            } else {
+                document.getElementById("output").innerText = "Failed to create session: " + data.error;
+                console.error("Create session error:", data); // Debugging: check error details
+            }
+        } catch (error) {
+            console.error("Network error:", error);
+        }
+    }
+</script>
+
+</body>
+</html>
