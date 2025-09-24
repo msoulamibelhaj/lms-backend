@@ -68,3 +68,50 @@ Teacher starts a session, devices connect via WebSockets.
 Teacher pushes playback commands to sync lessons across devices.
 
 Students’ interactions (gaze, clicks) are logged and monitored live.
+
+## User Roles
+### Student
+
+Logs in with nickname + PIN (and optionally tied to a DPVR device ID).
+
+Can join sessions started by a teacher.
+
+Receives lesson playback commands (play, pause, stop) from the teacher.
+
+Can interact inside VR lessons (gaze, clicks, object selection, quizzes).
+
+Has access to their own progress and results.
+
+Cannot create or manage classes/lessons.
+
+### Teacher
+
+Logs in with nickname + PIN.
+
+Can create classes, lessons, and sessions.
+
+Has control over lesson playback across devices:
+
+Start, pause, stop VR lessons for the whole class.
+
+Add lessons to an existing session.
+
+Can monitor student devices in real-time (viewport, interactions).
+
+Can view results and analytics for their students.
+
+Cannot manage system-wide settings (e.g., add new organizations).
+
+### Admin
+
+Full access through the Django Admin panel.
+
+Manages organizations/schools.
+
+Creates and manages users (teachers & students).
+
+Manages devices (DPVR bindings, registration).
+
+Configures global settings (roles, permissions, content policies).
+
+Can see all courses, lessons, sessions, and results across the system.
